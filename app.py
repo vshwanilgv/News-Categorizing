@@ -6,6 +6,8 @@ import nltk
 import pandas as pd
 from scipy.sparse import hstack
 import numpy as np
+import json
+import os
 
 # Download stopwords if not already present
 try:
@@ -125,6 +127,59 @@ def predict():
             'sentiment_confidence': round(sentiment_confidence, 2),
             'top_industries': top_industries,
             'cleaned_text': str(clean_combined[:200] + '...' if len(clean_combined) > 200 else clean_combined)
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/browse')
+def browse():
+    return render_template('browse.html')
+
+@app.route('/api/news')
+def get_news():
+    """API endpoint to get news articles with optional category filter"""
+    try:
+        category = request.args.get('category', None)
+        
+        # Load news data
+        news_file = 'static/data/news_sample.json'
+        if not os.path.exists(news_file):
+            return jsonify({'error': 'News data not found. Run create_sample_data.py first'}), 404
+        
+        with open(news_file, 'r', encoding='utf-8') as f:
+            news_data = json.load(f)
+        
+        # Filter by category if specified
+        if category and category != 'All':
+            news_data = [article for article in news_data if article['category'] == category]
+        
+        return jsonify({
+            'success': True,
+            'count': len(news_data),
+            'articles': news_data
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/categories')
+def get_categories():
+    """API endpoint to get all available categories"""
+    try:
+        news_file = 'static/data/news_sample.json'
+        if not os.path.exists(news_file):
+            return jsonify({'error': 'News data not found'}), 404
+        
+        with open(news_file, 'r', encoding='utf-8') as f:
+            news_data = json.load(f)
+        
+        # Extract unique categories
+        categories = sorted(list(set(article['category'] for article in news_data)))
+        
+        return jsonify({
+            'success': True,
+            'categories': categories
         })
     
     except Exception as e:

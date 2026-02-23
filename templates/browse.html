@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse News - News Categorization AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/browse.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📰 Browse News Articles</h1>
+            <p class="subtitle">Explore categorized Sri Lankan news articles</p>
+            <nav class="header-nav">
+                <a href="/" class="nav-link">Analyze Article</a>
+                <a href="/browse" class="nav-link active">Browse News</a>
+            </nav>
+        </header>
+
+        <main>
+            <div class="filter-section">
+                <div class="filter-header">
+                    <h2>Filter by Category</h2>
+                    <span class="article-count" id="articleCount">Loading...</span>
+                </div>
+                
+                <div class="category-filters" id="categoryFilters">
+                    <button class="category-btn active" data-category="All">All Categories</button>
+                    <!-- Categories will be loaded dynamically -->
+                </div>
+            </div>
+
+            <div class="news-grid" id="newsGrid">
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Loading news articles...</p>
+                </div>
+            </div>
+
+            <div class="error-section hidden" id="errorSection">
+                <div class="error-card">
+                    <span class="error-icon">⚠️</span>
+                    <p id="errorMessage"></p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Built with Flask, scikit-learn & LinearSVC | News Categorization System</p>
+        </footer>
+    </div>
+
+    <script>
+        let allArticles = [];
+        let currentCategory = 'All';
+
+        // Load categories on page load
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/categories');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const filtersContainer = document.getElementById('categoryFilters');
+                    const allBtn = filtersContainer.querySelector('[data-category="All"]');
+                    
+                    data.categories.forEach(category => {
+                        const btn = document.createElement('button');
+                        btn.className = 'category-btn';
+                        btn.setAttribute('data-category', category);
+                        btn.textContent = category;
+                        btn.onclick = () => filterByCategory(category);
+                        filtersContainer.appendChild(btn);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        // Load news articles
+        async function loadNews(category = 'All') {
+            try {
+                const url = category === 'All' ? '/api/news' : `/api/news?category=${encodeURIComponent(category)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    allArticles = data.articles;
+                    displayArticles(data.articles);
+                    updateArticleCount(data.count);
+                } else {
+                    showError(data.error || 'Failed to load articles');
+                }
+            } catch (error) {
+                showError('Failed to connect to the server');
+                console.error('Error:', error);
+            }
+        }
+
+        // Display articles in the grid
+        function displayArticles(articles) {
+            const newsGrid = document.getElementById('newsGrid');
+            
+            if (articles.length === 0) {
+                newsGrid.innerHTML = `
+                    <div class="no-results">
+                        <span class="no-results-icon">📭</span>
+                        <h3>No articles found</h3>
+                        <p>Try selecting a different category</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            newsGrid.innerHTML = articles.map(article => `
+                <div class="news-card" data-category="${article.category}">
+                    <div class="news-header">
+                        <span class="category-badge">${article.category}</span>
+                        <span class="sentiment-badge sentiment-${article.sentiment.toLowerCase()}">${article.sentiment}</span>
+                    </div>
+                    <h3 class="news-title">${escapeHtml(article.headline)}</h3>
+                    <p class="news-description">${escapeHtml(article.description)}</p>
+                    <div class="news-footer">
+                        ${article.date ? `<span class="news-date">📅 ${article.date}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Filter by category
+        function filterByCategory(category) {
+            currentCategory = category;
+            
+            // Update active button
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-category') === category) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Load filtered news
+            loadNews(category);
+        }
+
+        // Update article count
+        function updateArticleCount(count) {
+            document.getElementById('articleCount').textContent = `${count} article${count !== 1 ? 's' : ''}`;
+        }
+
+        // Show error
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorSection').classList.remove('hidden');
+            document.getElementById('newsGrid').innerHTML = '';
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCategories();
+            loadNews();
+        });
+    </script>
+</body>
+</html>
