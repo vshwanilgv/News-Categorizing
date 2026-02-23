@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Categorization AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📰 News Categorization AI</h1>
+            <p class="subtitle">Powered by Machine Learning - Analyze Sri Lankan News Articles</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <form id="newsForm">
+                    <div class="form-group">
+                        <label for="headline">News Headline *</label>
+                        <input 
+                            type="text" 
+                            id="headline" 
+                            name="headline" 
+                            placeholder="Enter news headline..."
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">News Description</label>
+                        <textarea 
+                            id="description" 
+                            name="description" 
+                            rows="6"
+                            placeholder="Enter news description (optional)..."
+                        ></textarea>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="analyzeBtn">
+                        <span class="btn-text">Analyze Article</span>
+                        <span class="loader hidden"></span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="results-section hidden" id="resultsSection">
+                <h2>Analysis Results</h2>
+                
+                <div class="results-grid">
+                    <div class="result-card primary-result">
+                        <div class="result-icon">🏢</div>
+                        <h3>Industry Category</h3>
+                        <p class="result-value" id="industryResult">-</p>
+                    </div>
+
+                    <div class="result-card primary-result">
+                        <div class="result-icon" id="sentimentIcon">😊</div>
+                        <h3>Sentiment Analysis</h3>
+                        <p class="result-value" id="sentimentResult">-</p>
+                        <p class="confidence-text" id="sentimentConfidence">-</p>
+                    </div>
+                </div>
+
+                <div class="top-predictions" id="topPredictions">
+                    <h3>Top Industry Predictions</h3>
+                    <div class="predictions-list" id="predictionsList">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
+                <div class="processed-text">
+                    <h3>Processed Text Preview</h3>
+                    <p id="cleanedText">-</p>
+                </div>
+            </div>
+
+            <div class="error-section hidden" id="errorSection">
+                <div class="error-card">
+                    <span class="error-icon">⚠️</span>
+                    <p id="errorMessage"></p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Built with Flask, scikit-learn & LinearSVC | News Categorization System</p>
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('newsForm');
+        const resultsSection = document.getElementById('resultsSection');
+        const errorSection = document.getElementById('errorSection');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const btnText = analyzeBtn.querySelector('.btn-text');
+        const loader = analyzeBtn.querySelector('.loader');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const headline = document.getElementById('headline').value.trim();
+            const description = document.getElementById('description').value.trim();
+            
+            if (!headline && !description) {
+                showError('Please provide at least a headline or description');
+                return;
+            }
+
+            // Show loading state
+            analyzeBtn.disabled = true;
+            btnText.textContent = 'Analyzing...';
+            loader.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        headline: headline,
+                        description: description
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    showResults(data);
+                }
+            } catch (error) {
+                showError('Failed to connect to the server. Please make sure the Flask app is running.');
+            } finally {
+                // Reset button state
+                analyzeBtn.disabled = false;
+                btnText.textContent = 'Analyze Article';
+                loader.classList.add('hidden');
+            }
+        });
+
+        function showResults(data) {
+            // Industry
+            document.getElementById('industryResult').textContent = data.industry;
+            
+            // Sentiment
+            const sentiment = data.sentiment;
+            document.getElementById('sentimentResult').textContent = sentiment;
+            document.getElementById('sentimentConfidence').textContent = 
+                `Confidence: ${data.sentiment_confidence}%`;
+            
+            // Update sentiment icon
+            const sentimentIcon = document.getElementById('sentimentIcon');
+            if (sentiment === 'POSITIVE') {
+                sentimentIcon.textContent = '😊';
+            } else if (sentiment === 'NEGATIVE') {
+                sentimentIcon.textContent = '😞';
+            } else {
+                sentimentIcon.textContent = '😐';
+            }
+            
+            // Top predictions
+            const predictionsList = document.getElementById('predictionsList');
+            predictionsList.innerHTML = '';
+            data.top_industries.forEach((item, index) => {
+                const predItem = document.createElement('div');
+                predItem.className = 'prediction-item';
+                predItem.innerHTML = `
+                    <span class="rank">#${index + 1}</span>
+                    <span class="industry-name">${item.industry}</span>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${item.confidence}%"></div>
+                    </div>
+                    <span class="confidence-value">${item.confidence.toFixed(1)}%</span>
+                `;
+                predictionsList.appendChild(predItem);
+            });
+            
+            // Cleaned text
+            document.getElementById('cleanedText').textContent = data.cleaned_text;
+            
+            // Show results
+            resultsSection.classList.remove('hidden');
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            errorSection.classList.remove('hidden');
+            errorSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Sample data for quick testing
+        const sampleArticles = [
+            {
+                headline: "Central Bank raises interest rates to combat inflation",
+                description: "The Central Bank of Sri Lanka announced a 50 basis point increase in policy rates to control rising inflation."
+            },
+            {
+                headline: "New tech startup launches AI-powered customer service platform",
+                description: "A local technology company unveiled an innovative artificial intelligence solution for businesses."
+            },
+            {
+                headline: "Rice production expected to decline due to drought", 
+                description: "Farmers report significant crop losses as the dry season continues with minimal rainfall."
+            }
+        ];
+
+        // Add sample buttons
+        function loadSample(index) {
+            document.getElementById('headline').value = sampleArticles[index].headline;
+            document.getElementById('description').value = sampleArticles[index].description;
+        }
+    </script>
+</body>
+</html>
